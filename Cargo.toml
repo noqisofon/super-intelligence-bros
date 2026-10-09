@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 # ヘッドレス用: 描画・ウィンドウ系の feature は入れない
 bevy = { version = "0.19", default-features = false }
+png = "0.18.1"
 rmcp = { version = "3.5.1", features = ["server", "transport-io", "macros"] }
 schemars = "1.2.2"
 serde = { version = "1.0.229", features = ["derive"] }

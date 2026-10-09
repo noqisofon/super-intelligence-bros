@@ -13,6 +13,7 @@
 use bevy::prelude::*;
 
 pub mod solver;
+pub mod visual;
 
 pub const DT: f32 = 1.0 / 60.0;
 const GRAVITY: f32 = 40.0; // tiles/s^2
