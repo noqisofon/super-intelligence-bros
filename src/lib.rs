@@ -537,6 +537,8 @@ impl Game {
     pub fn with_level(src: &str) -> Self {
         let level = Level::parse(src);
         let player_start = level.player_start;
+        // 開始位置の足元に地面があれば、最初から接地している（空中開始なら false）
+        let grounded = level.collides(player_start + Vec2::new(0.0, 0.01), BODY_HALF);
         let boss_start = level.boss_start;
         let items = level.items.clone();
 
@@ -552,7 +554,7 @@ impl Game {
         app.cleanup();
 
         let world = app.world_mut();
-        world.spawn((Player, Pos(player_start), Vel::default(), OnGround::default()));
+        world.spawn((Player, Pos(player_start), Vel::default(), OnGround(grounded)));
         if let Some(b) = boss_start {
             world.spawn((
                 Boss { hp: BOSS_HP, dir: -1.0, stun: 0, shout: 0 },
@@ -775,6 +777,16 @@ mod tests {
         g.step(IDLE, 1);
         let out = g.observe();
         assert!(out.starts_with("tick=1 "), "{out}");
+    }
+
+    #[test]
+    fn grounded_from_the_very_first_tick_only_when_standing_on_something() {
+        // 地面の上に立って始まるステージは、tick 0 から接地している
+        let mut g = Game::new();
+        assert!(g.observe().contains("on_ground=true"));
+        // 空中から始まるステージは接地していない
+        let mut g = Game::with_level("@.\n..\n##");
+        assert!(g.observe().contains("on_ground=false"));
     }
 
     #[test]
