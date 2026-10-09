@@ -14,6 +14,7 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router,
 };
 use serde::Deserialize;
+use super_intelligence_bros::solver::{self, SolveConfig};
 use super_intelligence_bros::{DEFAULT_LEVEL, Game, PadInput, Status};
 
 const MAX_FRAMES: u32 = 600;
@@ -36,8 +37,14 @@ struct StepArgs {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 struct LoadLevelArgs {
     /// ステージのテキスト。1行=1段、全行同じ幅。
-    /// `.`空気 `#`地面 `P`土管 `S`Sキノコ `B`ボス（最大1） `@`プレイヤー開始（ちょうど1）
+    /// `.`空気 `#`地面 `P`土管 `S`Sキノコ `B`ボス（最大1） `G`ゴール（最大1） `@`プレイヤー開始（ちょうど1）
     level: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct SolveArgs {
+    /// 探索にかけてよい秒数。1〜60。省略すると 10。
+    max_seconds: Option<f64>,
 }
 
 // ------------------------------------------------------------ ゲームスレッド
@@ -47,6 +54,7 @@ enum Cmd {
     Observe,
     Reset,
     Load(String),
+    Solve(f64),
 }
 
 struct Req {
@@ -81,6 +89,14 @@ fn game_thread(rx: mpsc::Receiver<Req>) {
                 }
                 Err(e) => format!("error: ステージを読み込めませんでした: {e}"),
             },
+            // 今のゲーム状態は触らず、ステージを最初から解けるか探す
+            Cmd::Solve(max_seconds) => {
+                let cfg = SolveConfig { max_seconds, ..Default::default() };
+                match solver::solve(&level_src, &cfg) {
+                    Ok(outcome) => solver::format_outcome(&outcome),
+                    Err(e) => format!("error: {e}"),
+                }
+            }
         };
         let _ = req.reply.send(out);
     }
@@ -138,6 +154,17 @@ impl SiBros {
     fn load_level(&self, Parameters(a): Parameters<LoadLevelArgs>) -> String {
         self.ask(Cmd::Load(a.level))
     }
+
+    #[tool(
+        description = "今のステージが最初からクリアできるかを探索する（ゲームの進行状態は変えない）。\
+                       solved なら入力列を返す。unreachable は「最も細かい粒度(1フレーム刻み)・3600tick以内で探索しきっても\
+                       見つからなかった」という意味で、絶対に不可能という証明ではない。\
+                       gave_up は時間切れで、クリア可否は不明。"
+    )]
+    fn solve(&self, Parameters(a): Parameters<SolveArgs>) -> String {
+        let secs = a.max_seconds.unwrap_or(10.0).clamp(1.0, 60.0);
+        self.ask(Cmd::Solve(secs))
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -146,9 +173,11 @@ impl ServerHandler for SiBros {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
             "Super Intelligence Bros は横スクロール風アクション。あなたはロボット「エスアイくん」(@)。\
              step で入力を押したまま進め、返ってくるテキストを読んで次の手を決める。\
-             グリッド: `#`地面 `P`土管 `S`Sキノコ `B`スーパー部長 `@`自分。座標はタイル単位で y は下向きが正。\
-             ボスは上から踏むとHPが減る（3回でクリア）。横から当たると、SIならAIに戻り、AIならやられる。\
-             Sキノコは看板が SI になるだけで強さは変わらない。",
+             グリッド: `#`地面 `P`土管 `S`Sキノコ `B`スーパー部長 `G`ゴール `@`自分。座標はタイル単位で y は下向きが正。\
+             ボスは上から踏むとHPが減る（3回で倒せる）。横から当たると、SIならAIに戻り、AIならやられる。\
+             クリア条件: ステージに G があれば G に触れる。G がなければボスを倒す。\
+             Sキノコは看板が SI になるだけで強さは変わらない。\
+             ステージは load_level で書き換えられ、solve でクリア可能かを確かめられる。",
         )
     }
 }

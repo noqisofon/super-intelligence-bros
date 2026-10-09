@@ -12,6 +12,8 @@
 
 use bevy::prelude::*;
 
+pub mod solver;
+
 pub const DT: f32 = 1.0 / 60.0;
 const GRAVITY: f32 = 40.0; // tiles/s^2
 const RUN_SPEED: f32 = 6.0; // tiles/s
@@ -24,6 +26,7 @@ const BOSS_SHOUT_TICKS: u32 = 180;
 const INVULN_TICKS: u32 = 90;
 const BODY_HALF: Vec2 = Vec2::new(0.4, 0.45);
 const ITEM_HALF: Vec2 = Vec2::new(0.35, 0.35);
+const GOAL_HALF: Vec2 = Vec2::new(0.4, 0.5);
 const EPS: f32 = 1e-4;
 
 // ---------------------------------------------------------------- components
@@ -126,14 +129,17 @@ pub struct Level {
     player_start: Vec2,
     boss_start: Option<Vec2>,
     items: Vec<Vec2>,
+    goals: Vec<Vec2>,
 }
 
 impl Level {
-    /// `#` 地面/ブロック, `P` 土管, `@` プレイヤー開始, `B` ボス, `S` Sキノコ, `.` 空気
+    /// `#` 地面/ブロック, `P` 土管, `@` プレイヤー開始, `B` ボス, `S` Sキノコ,
+    /// `G` ゴール（あればここに触れてクリア。なければボスを倒してクリア）, `.` 空気
     pub fn parse(src: &str) -> Self {
         let mut player_start = Vec2::new(1.5, 1.5);
         let mut boss_start = None;
         let mut items = Vec::new();
+        let mut goals = Vec::new();
         let mut rows: Vec<Vec<u8>> = Vec::new();
         for (y, line) in src.lines().enumerate() {
             let mut row = line.as_bytes().to_vec();
@@ -153,12 +159,16 @@ impl Level {
                         items.push(Vec2::new(x as f32 + 0.5, y as f32 + 0.5));
                         *c = b'.';
                     }
+                    b'G' => {
+                        goals.push(Vec2::new(x as f32 + 0.5, y as f32 + 0.5));
+                        *c = b'.';
+                    }
                     _ => {}
                 }
             }
             rows.push(row);
         }
-        Self { rows, player_start, boss_start, items }
+        Self { rows, player_start, boss_start, items, goals }
     }
 
     pub fn width(&self) -> i32 {
@@ -217,7 +227,7 @@ pub fn validate_level(src: &str) -> Result<(), String> {
     if w == 0 || w > MAX_W {
         return Err(format!("幅は 1〜{MAX_W} 列にしてください"));
     }
-    let (mut players, mut bosses) = (0, 0);
+    let (mut players, mut bosses, mut goals) = (0, 0, 0);
     for (y, row) in rows.iter().enumerate() {
         if row.len() != w {
             return Err(format!(
@@ -231,9 +241,10 @@ pub fn validate_level(src: &str) -> Result<(), String> {
                 '.' | '#' | 'P' | 'S' => {}
                 '@' => players += 1,
                 'B' => bosses += 1,
+                'G' => goals += 1,
                 _ => {
                     return Err(format!(
-                        "{}行{}列目に使えない文字 {c:?} があります（使える文字: . # P S B @）",
+                        "{}行{}列目に使えない文字 {c:?} があります（使える文字: . # P S B G @）",
                         y + 1,
                         x + 1
                     ));
@@ -246,6 +257,9 @@ pub fn validate_level(src: &str) -> Result<(), String> {
     }
     if bosses > 1 {
         return Err(format!("'B'（ボス）は最大1つです（今は {bosses} 個）"));
+    }
+    if goals > 1 {
+        return Err(format!("'G'（ゴール）は最大1つです（今は {goals} 個）"));
     }
     Ok(())
 }
@@ -373,6 +387,14 @@ fn interact(
         }
     }
 
+    for g in &level.goals {
+        if overlap(p, BODY_HALF, *g, GOAL_HALF) {
+            state.status = Status::Cleared;
+            log.push(t, "ゴールに着いた。クリア！");
+            return;
+        }
+    }
+
     for (e, bpos, mut boss) in &mut bosses {
         if boss.stun > 0 || !overlap(p, BODY_HALF, bpos.0, BODY_HALF) {
             continue;
@@ -383,8 +405,12 @@ fn interact(
             pvel.0.y = -STOMP_BOUNCE;
             if boss.hp == 0 {
                 commands.entity(e).despawn();
-                state.status = Status::Cleared;
-                log.push(t, "スーパー部長を踏み倒した。「SI」の看板が落ちて、静かに「AI」と読めた。クリア！");
+                if level.goals.is_empty() {
+                    state.status = Status::Cleared;
+                    log.push(t, "スーパー部長を踏み倒した。「SI」の看板が落ちて、静かに「AI」と読めた。クリア！");
+                } else {
+                    log.push(t, "スーパー部長を踏み倒した。「SI」の看板が落ちて、静かに「AI」と読めた。あとはゴールだ。");
+                }
             } else {
                 boss.stun = BOSS_STUN_TICKS;
                 log.push(
@@ -407,6 +433,86 @@ fn interact(
 
 fn count_tick(mut tick: ResMut<Tick>) {
     tick.0 += 1;
+}
+
+// ---------------------------------------------------------------- Snapshot
+
+#[derive(Clone, Debug)]
+struct BossSnap {
+    pos: Vec2,
+    vel: Vec2,
+    hp: u8,
+    dir: f32,
+    stun: u32,
+    shout: u32,
+}
+
+/// ゲーム状態の完全なコピー。ソルバーが「この状態に戻ってやり直す」ために使う。
+#[derive(Clone, Debug)]
+pub struct Snapshot {
+    tick: u64,
+    status: Status,
+    form: Form,
+    invuln: u32,
+    player_pos: Vec2,
+    player_vel: Vec2,
+    player_ground: bool,
+    boss: Option<BossSnap>,
+    items: Vec<Vec2>,
+}
+
+impl Snapshot {
+    pub fn tick(&self) -> u64 {
+        self.tick
+    }
+
+    pub fn status(&self) -> Status {
+        self.status
+    }
+
+    pub fn player_pos(&self) -> Vec2 {
+        self.player_pos
+    }
+
+    pub fn boss_pos(&self) -> Option<Vec2> {
+        self.boss.as_ref().map(|b| b.pos)
+    }
+
+    pub fn boss_hp(&self) -> Option<u8> {
+        self.boss.as_ref().map(|b| b.hp)
+    }
+
+    /// 「同じ状態」とみなすための量子化キー。時刻(tick)は含めない
+    /// （ボスの位相・無敵時間などが状態に入っているので、時刻自体は結果に影響しない）。
+    pub fn key(&self) -> Vec<i32> {
+        let q = |v: f32, scale: f32| (v * scale).round() as i32;
+        let mut k = vec![
+            q(self.player_pos.x, 32.0),
+            q(self.player_pos.y, 32.0),
+            q(self.player_vel.x, 8.0),
+            q(self.player_vel.y, 8.0),
+            self.player_ground as i32,
+            self.status as i32,
+            self.form as i32,
+            self.invuln as i32,
+        ];
+        match &self.boss {
+            Some(b) => k.extend([
+                1,
+                q(b.pos.x, 32.0),
+                q(b.pos.y, 32.0),
+                q(b.vel.x, 4.0),
+                b.hp as i32,
+                b.dir as i32,
+                b.stun as i32,
+            ]),
+            None => k.push(0),
+        }
+        for i in &self.items {
+            k.extend([q(i.x, 2.0), q(i.y, 2.0)]);
+        }
+        k
+    }
 }
 
 // ---------------------------------------------------------------- Game
@@ -502,6 +608,9 @@ impl Game {
                 grid[y as usize][x as usize] = c;
             }
         };
+        for g in &level.goals {
+            put(*g, 'G');
+        }
         for p in &item_tiles {
             put(*p, 'S');
         }
@@ -535,6 +644,80 @@ impl Game {
             }
         }
         out
+    }
+
+    /// いまの状態を丸ごと保存する。
+    pub fn snapshot(&mut self) -> Snapshot {
+        let world = self.app.world_mut();
+        let tick = world.resource::<Tick>().0;
+        let (status, form, invuln) = {
+            let s = world.resource::<PlayerState>();
+            (s.status, s.form, s.invuln)
+        };
+        let (player_pos, player_vel, player_ground) = {
+            let mut q = world.query_filtered::<(&Pos, &Vel, &OnGround), With<Player>>();
+            let (p, v, g) = q.single(world).expect("player must exist");
+            (p.0, v.0, g.0)
+        };
+        let boss = {
+            let mut q = world.query::<(&Pos, &Vel, &Boss)>();
+            q.iter(world).next().map(|(p, v, b)| BossSnap {
+                pos: p.0,
+                vel: v.0,
+                hp: b.hp,
+                dir: b.dir,
+                stun: b.stun,
+                shout: b.shout,
+            })
+        };
+        let mut items: Vec<Vec2> = {
+            let mut q = world.query_filtered::<&Pos, With<Item>>();
+            q.iter(world).map(|p| p.0).collect()
+        };
+        items.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+        Snapshot { tick, status, form, invuln, player_pos, player_vel, player_ground, boss, items }
+    }
+
+    /// 保存した状態に巻き戻す（イベントログは空になる）。
+    pub fn restore(&mut self, s: &Snapshot) {
+        let world = self.app.world_mut();
+        world.resource_mut::<Tick>().0 = s.tick;
+        {
+            let mut st = world.resource_mut::<PlayerState>();
+            st.status = s.status;
+            st.form = s.form;
+            st.invuln = s.invuln;
+        }
+        world.resource_mut::<EventLog>().0.clear();
+        {
+            let mut q = world.query_filtered::<(&mut Pos, &mut Vel, &mut OnGround), With<Player>>();
+            let (mut p, mut v, mut g) = q.single_mut(world).expect("player must exist");
+            p.0 = s.player_pos;
+            v.0 = s.player_vel;
+            g.0 = s.player_ground;
+        }
+        let old: Vec<Entity> = {
+            let mut q = world.query_filtered::<Entity, Or<(With<Boss>, With<Item>)>>();
+            q.iter(world).collect()
+        };
+        for e in old {
+            world.despawn(e);
+        }
+        if let Some(b) = &s.boss {
+            world.spawn((
+                Boss { hp: b.hp, dir: b.dir, stun: b.stun, shout: b.shout },
+                Pos(b.pos),
+                Vel(b.vel),
+            ));
+        }
+        for i in &s.items {
+            world.spawn((Item, Pos(*i)));
+        }
+    }
+
+    /// ゴールタイルの位置（なければ None）。
+    pub fn goal_pos(&self) -> Option<Vec2> {
+        self.app.world().resource::<Level>().goals.first().copied()
     }
 
     // ---- テスト・MCP 用のアクセサ
@@ -677,6 +860,98 @@ mod tests {
         assert!(err("@@\n##").contains("'@'"));
         assert!(err("@B\nB#").contains("'B'"));
         assert!(Game::try_with_level("@.\n##").is_ok());
+    }
+
+    #[test]
+    fn touching_the_goal_clears_the_stage() {
+        let mut g = Game::with_level("@....G\n######");
+        g.step(RIGHT, 120);
+        assert_eq!(g.status(), Status::Cleared);
+        let out = g.observe();
+        assert!(out.contains("ゴールに着いた"), "{out}");
+    }
+
+    /// ボスの真上から落下する状況を作る（ボスのHPは1）。踏めば撃破になる。
+    fn game_about_to_stomp_boss(level: &str) -> Game {
+        let mut g = Game::with_level(level);
+        let mut snap = g.snapshot();
+        let boss = snap.boss.as_mut().expect("level must have a boss");
+        boss.hp = 1;
+        let above = Vec2::new(boss.pos.x, boss.pos.y - 1.0);
+        snap.player_pos = above;
+        snap.player_vel = Vec2::new(0.0, 5.0);
+        snap.player_ground = false;
+        g.restore(&snap);
+        g
+    }
+
+    const BOSS_AND_GOAL: &str = "\
+...........
+.@......B.G
+###########";
+    const BOSS_ONLY: &str = "\
+...........
+.@......B..
+###########";
+
+    #[test]
+    fn defeating_the_boss_clears_only_when_there_is_no_goal() {
+        // ゴールがないステージ: ボスを踏み倒したらクリア
+        let mut g = game_about_to_stomp_boss(BOSS_ONLY);
+        g.step(IDLE, 10);
+        assert_eq!(g.boss_hp(), None, "ボスは倒れているはず");
+        assert_eq!(g.status(), Status::Cleared);
+
+        // ゴールがあるステージ: ボスを倒してもまだ playing。G に触れるまでクリアにならない
+        let mut g = game_about_to_stomp_boss(BOSS_AND_GOAL);
+        g.step(IDLE, 10);
+        assert_eq!(g.boss_hp(), None, "ボスは倒れているはず");
+        assert_eq!(g.status(), Status::Playing);
+        assert!(g.observe().contains("あとはゴールだ"));
+    }
+
+    #[test]
+    fn snapshot_restore_roundtrip_is_exact() {
+        let mut g = Game::new();
+        g.step(RIGHT, 70); // Sキノコを取り、ボスも動いている
+        let snap = g.snapshot();
+        let key = snap.key();
+
+        g.step(JUMP_RIGHT, 50);
+        g.step(IDLE, 30);
+        assert_ne!(g.snapshot().key(), key, "状態が動いているはず");
+
+        g.restore(&snap);
+        assert_eq!(g.snapshot().key(), key, "復元後は保存時と同じ状態");
+
+        // 復元した状態から先は、最初から同じ入力を流した場合と完全に一致する
+        g.step(JUMP_RIGHT, 40);
+        let after_restore = g.observe();
+
+        let mut fresh = Game::new();
+        fresh.step(RIGHT, 70);
+        fresh.step(JUMP_RIGHT, 40);
+        let after_fresh = fresh.observe();
+
+        let strip = |s: &str| s.lines().filter(|l| !l.starts_with("events") && !l.starts_with("- ")).collect::<Vec<_>>().join("\n");
+        assert_eq!(strip(&after_restore), strip(&after_fresh));
+    }
+
+    #[test]
+    fn restoring_brings_back_a_picked_up_item() {
+        let mut g = Game::new();
+        let before = g.snapshot();
+        g.step(RIGHT, 60);
+        assert_eq!(g.form(), Form::Si);
+        g.restore(&before);
+        assert_eq!(g.form(), Form::Ai);
+        assert!(g.observe().contains('S'), "Sキノコがグリッドに戻っているはず");
+    }
+
+    #[test]
+    fn goal_level_validation() {
+        assert!(validate_level("@.G\n###").is_ok());
+        assert!(validate_level("@GG\n###").unwrap_err().contains("'G'"));
     }
 
     #[test]
