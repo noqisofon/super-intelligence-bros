@@ -4,7 +4,9 @@
 AI エージェント（LLM）が MCP 経由で遊べる、マリオっぽい横スクロールアクションです。
 ロボットの「エスアイくん」を操作して、偉そうなスーツのおっさん「スーパー部長」を踏み倒すのが目的です。
 
-- ゲームの中身は Bevy をヘッドレスで動かしたもの（描画なし）
+![初期ステージ（sibros-snap で出力）](docs/preview.png)
+
+- ゲームの中身は Bevy をヘッドレスで動かしたもの（描画は別バイナリ）
 - 1 tick = 1/60 秒で固定。同じ入力なら必ず同じ結果になる（リプレイ・再現しやすい）
 - 画面はテキストにして返すので、画像を読めないモデルでも遊べる
 
@@ -21,6 +23,33 @@ cargo test
 
 # MCP サーバーをビルド
 cargo build --release --bin sibros-mcp
+```
+
+## 画面で遊ぶ（描画版 `sibros-view`）
+
+Bevy の描画つきビューアです。ゲームのルールはヘッドレス版と同じコアを使っています。
+描画まわりの依存は大きいので、`view` feature を付けたときだけビルドされます。
+
+```sh
+cargo run --features view --bin sibros-view            # 初期ステージ
+cargo run --features view --bin sibros-view my_stage.txt  # ステージのテキストファイルを指定
+```
+
+- 操作: `←` `→` / `A` `D` で移動、`Space` / `Z` / `↑` / `W` でジャンプ、`R` でやり直し
+- 画面の文字は ASCII のみです（Bevy 標準のフォントが日本語に対応していないため）
+- Linux では X11（Wayland 環境でも XWayland 経由）で動かす構成にしています
+- **注意**: 開発環境に GPU も画面もなかったため、ビルドが通ることと、ウィンドウを作る前までの動作は確認していますが、
+  **実際の描画・入力は未確認**です。動かない・見た目がおかしいときは Issue などで教えてください。
+  見た目の割り当ては、下の `sibros-snap` で PNG にして確認しています
+
+### 画像で確認する（`sibros-snap`）
+
+GPU もウィンドウも使わずに、ステージの絵を CPU で PNG に書き出します。描画版と同じ割り当て（`src/visual.rs`）を使います。
+
+```sh
+cargo run --bin sibros-snap -- out.png                          # 初期ステージ
+cargo run --bin sibros-snap -- out.png --run "right:130,right+jump:12"   # 入力を流した後の絵
+cargo run --bin sibros-snap -- out.png --level my_stage.txt --scale 6
 ```
 
 ## MCP サーバーとして使う
@@ -110,8 +139,13 @@ events:
 ```
 src/lib.rs            ゲームのコア（物理・ボス・アイテム・ゴール・ステージ検証・step/observe・スナップショット）
 src/solver.rs         ステージの解法探索（最良優先探索）
+src/visual.rs         見た目の割り当て（どのマスにどのタイル/スプライトを描くか。描画エンジンに依存しない）
 src/main.rs           動作デモ
 src/bin/sibros-mcp.rs MCP サーバー（rmcp, stdio）
+src/bin/sibros-snap.rs ステージを CPU で PNG に書き出す
+src/bin/sibros-view.rs Bevy の描画つきビューア（--features view）
+assets/               タイルシートとスプライト（クレジットは assets/CREDITS.md）
+tools/gen_sprites.py  assets/sprites.png の生成スクリプト
 ```
 
 Bevy の `App` は `Send` ではないため、MCP サーバーはゲームを専用スレッドに置き、チャンネルでコマンドを送っています。
@@ -121,7 +155,15 @@ Bevy の `App` は `Send` ではないため、MCP サーバーはゲームを�
 - ステージエディットモード（`set_tile` / `fill_rect` などの部分編集ツール）
 - 敵・アイテムの追加（関税ブロックのような、触ると効果のあるタイルなど）
 - 「作る側」と「攻略する側」を別のモデルにして対決させるモード
-- マリオっぽいドット絵素材での描画（ヘッドレスはそのまま残す）
+- 描画版の動作確認（実機での入力・見た目）と、画面での日本語表示（日本語フォントの同梱）
+- 描画版でボスのセリフ（「それはAIじゃない、SIだ！」）を出す
+
+## 素材とクレジット
+
+- タイル: **「1985」 by Adam Saltsman** — https://adamatomic.itch.io/1985 （配布ページでパブリックドメインとされている）
+- キャラクター・アイテムのスプライトは、このプロジェクトのオリジナル（`tools/gen_sprites.py` で生成）
+
+詳しくは `assets/CREDITS.md`。
 
 ## ライセンス
 

@@ -12,6 +12,27 @@ schemars = "1.2.2"
 serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "io-std"] }
 
+[features]
+# 描画つきのビューア（sibros-view）用。ウィンドウ・GPU・入力まわりを足すので、通常のビルドには入れない
+# Bevy の標準セット(2d/ui)から、Wayland・ゲームパッド(libudev)・クリップボードなどを外した最小構成。
+# Linux では X11（Wayland 環境でも XWayland 経由）で動く。Windows / macOS はそのまま動く想定。
+view = [
+    "bevy/default_app",
+    "bevy/std",
+    "bevy/multi_threaded",
+    "bevy/bevy_winit",
+    "bevy/x11",
+    "bevy/default_font",
+    "bevy/2d_bevy_render",
+    "bevy/ui_bevy_render",
+    "bevy/png",
+]
+
+[[bin]]
+name = "sibros-view"
+path = "src/bin/sibros-view.rs"
+required-features = ["view"]
+
 [profile.dev]
 opt-level = 1
 
