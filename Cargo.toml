@@ -1,0 +1,18 @@
+[package]
+name = "super-intelligence-bros"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# ヘッドレス用: 描画・ウィンドウ系の feature は入れない
+bevy = { version = "0.19", default-features = false }
+rmcp = { version = "3.5.1", features = ["server", "transport-io", "macros"] }
+schemars = "1.2.2"
+serde = { version = "1.0.229", features = ["derive"] }
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "io-std"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
