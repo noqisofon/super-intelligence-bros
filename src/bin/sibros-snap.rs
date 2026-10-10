@@ -35,7 +35,10 @@ fn decode(bytes: &[u8]) -> Result<Image, String> {
     let (w, h) = (info.width as usize, info.height as usize);
     let rgba = match info.color_type {
         png::ColorType::Rgba => data.to_vec(),
-        png::ColorType::Rgb => data.chunks(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
+        png::ColorType::Rgb => data
+            .chunks(3)
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect(),
         other => return Err(format!("未対応の色形式です: {other:?}")),
     };
     Ok(Image { w, h, rgba })
@@ -44,8 +47,12 @@ fn decode(bytes: &[u8]) -> Result<Image, String> {
 fn parse_run(spec: &str) -> Result<Vec<(PadInput, u32)>, String> {
     let mut out = Vec::new();
     for part in spec.split(',').filter(|s| !s.is_empty()) {
-        let (keys, frames) = part.split_once(':').ok_or(format!("`{part}` は 入力:フレーム の形で書いてください"))?;
-        let frames: u32 = frames.parse().map_err(|_| format!("フレーム数が数字ではありません: {frames}"))?;
+        let (keys, frames) = part
+            .split_once(':')
+            .ok_or(format!("`{part}` は 入力:フレーム の形で書いてください"))?;
+        let frames: u32 = frames
+            .parse()
+            .map_err(|_| format!("フレーム数が数字ではありません: {frames}"))?;
         let mut input = PadInput::default();
         for k in keys.split('+') {
             match k {
@@ -53,7 +60,11 @@ fn parse_run(spec: &str) -> Result<Vec<(PadInput, u32)>, String> {
                 "right" => input.right = true,
                 "jump" => input.jump = true,
                 "wait" => {}
-                other => return Err(format!("知らない入力です: {other}（left / right / jump / wait）")),
+                other => {
+                    return Err(format!(
+                        "知らない入力です: {other}（left / right / jump / wait）"
+                    ));
+                }
             }
         }
         out.push((input, frames));
@@ -72,13 +83,18 @@ fn main() -> Result<(), String> {
             "--level" => level_path = Some(args.next().ok_or("--level にファイル名が必要です")?),
             "--run" => run = args.next().ok_or("--run に指定が必要です")?,
             "--scale" => {
-                scale = args.next().ok_or("--scale に数字が必要です")?.parse().map_err(|_| "--scale は数字です")?;
+                scale = args
+                    .next()
+                    .ok_or("--scale に数字が必要です")?
+                    .parse()
+                    .map_err(|_| "--scale は数字です")?;
             }
             _ if out_path.is_none() => out_path = Some(a),
             _ => return Err(format!("余計な引数です: {a}")),
         }
     }
-    let out_path = out_path.ok_or("使い方: sibros-snap OUT.png [--level FILE] [--run SPEC] [--scale N]")?;
+    let out_path =
+        out_path.ok_or("使い方: sibros-snap OUT.png [--level FILE] [--run SPEC] [--scale N]")?;
     let src = match level_path {
         Some(p) => std::fs::read_to_string(&p).map_err(|e| format!("{p}: {e}"))?,
         None => DEFAULT_LEVEL.to_string(),
@@ -97,7 +113,12 @@ fn main() -> Result<(), String> {
     let (w, h) = (tw * cell * scale, level.height() as usize * cell * scale);
     let mut canvas = vec![0u8; w * h * 4];
     for px in canvas.chunks_mut(4) {
-        px.copy_from_slice(&[visual::SKY_RGB[0], visual::SKY_RGB[1], visual::SKY_RGB[2], 255]);
+        px.copy_from_slice(&[
+            visual::SKY_RGB[0],
+            visual::SKY_RGB[1],
+            visual::SKY_RGB[2],
+            255,
+        ]);
     }
 
     let mut draws: Vec<Draw> = visual::terrain_draws(&level);
@@ -134,7 +155,13 @@ fn main() -> Result<(), String> {
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
     let mut writer = enc.write_header().map_err(|e| e.to_string())?;
-    writer.write_image_data(&canvas).map_err(|e| e.to_string())?;
-    println!("wrote {out_path} ({w}x{h}) tick={} status={:?}", snap.tick(), snap.status());
+    writer
+        .write_image_data(&canvas)
+        .map_err(|e| e.to_string())?;
+    println!(
+        "wrote {out_path} ({w}x{h}) tick={} status={:?}",
+        snap.tick(),
+        snap.status()
+    );
     Ok(())
 }

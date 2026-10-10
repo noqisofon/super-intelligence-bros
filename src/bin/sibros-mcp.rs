@@ -91,7 +91,10 @@ fn game_thread(rx: mpsc::Receiver<Req>) {
             },
             // 今のゲーム状態は触らず、ステージを最初から解けるか探す
             Cmd::Solve(max_seconds) => {
-                let cfg = SolveConfig { max_seconds, ..Default::default() };
+                let cfg = SolveConfig {
+                    max_seconds,
+                    ..Default::default()
+                };
                 match solver::solve(&level_src, &cfg) {
                     Ok(outcome) => solver::format_outcome(&outcome),
                     Err(e) => format!("error: {e}"),
@@ -114,7 +117,10 @@ impl SiBros {
     fn new() -> Self {
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || game_thread(rx));
-        Self { tx, tool_router: Self::tool_router() }
+        Self {
+            tx,
+            tool_router: Self::tool_router(),
+        }
     }
 
     fn ask(&self, cmd: Cmd) -> String {
@@ -122,7 +128,8 @@ impl SiBros {
         if self.tx.send(Req { cmd, reply }).is_err() {
             return "error: ゲームスレッドが止まっています".into();
         }
-        rx.recv().unwrap_or_else(|_| "error: ゲームスレッドから応答がありません".into())
+        rx.recv()
+            .unwrap_or_else(|_| "error: ゲームスレッドから応答がありません".into())
     }
 }
 
@@ -134,10 +141,19 @@ impl SiBros {
     )]
     fn step(&self, Parameters(a): Parameters<StepArgs>) -> String {
         let frames = a.frames.unwrap_or(10).clamp(1, MAX_FRAMES);
-        self.ask(Cmd::Step(PadInput { left: a.left, right: a.right, jump: a.jump }, frames))
+        self.ask(Cmd::Step(
+            PadInput {
+                left: a.left,
+                right: a.right,
+                jump: a.jump,
+            },
+            frames,
+        ))
     }
 
-    #[tool(description = "時間を進めずに現在の状態（ステータス・座標・ボス・グリッド・前回からのイベント）を返す。")]
+    #[tool(
+        description = "時間を進めずに現在の状態（ステータス・座標・ボス・グリッド・前回からのイベント）を返す。"
+    )]
     fn observe(&self) -> String {
         self.ask(Cmd::Observe)
     }
@@ -184,6 +200,10 @@ impl ServerHandler for SiBros {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    SiBros::new().serve(rmcp::transport::stdio()).await?.waiting().await?;
+    SiBros::new()
+        .serve(rmcp::transport::stdio())
+        .await?
+        .waiting()
+        .await?;
     Ok(())
 }

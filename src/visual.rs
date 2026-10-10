@@ -92,7 +92,11 @@ pub fn terrain_draws(level: &Level) -> Vec<Draw> {
                 let head = !is(level, x, y - 1, b'P');
                 let right = is(level, x - 1, y, b'P');
                 let side = right as usize;
-                if head { tile::PIPE_HEAD[side] } else { tile::PIPE_BODY[side] }
+                if head {
+                    tile::PIPE_HEAD[side]
+                } else {
+                    tile::PIPE_BODY[side]
+                }
             } else {
                 continue;
             };
@@ -127,7 +131,13 @@ pub fn player_sprite(snap: &Snapshot, form: Form) -> usize {
 pub fn dynamic_draws(snap: &Snapshot, form: Form, goal: Option<Vec2>) -> Vec<Draw> {
     let mut out = Vec::new();
     let mut push = |index: usize, p: Vec2, dy: f32, flip_x: bool| {
-        out.push(Draw { atlas: Atlas::Sprites, index, x: p.x, y: p.y + dy, flip_x });
+        out.push(Draw {
+            atlas: Atlas::Sprites,
+            index,
+            x: p.x,
+            y: p.y + dy,
+            flip_x,
+        });
     };
     if let Some(g) = goal {
         push(sprite::GOAL, g, 0.0, false);
@@ -136,7 +146,11 @@ pub fn dynamic_draws(snap: &Snapshot, form: Form, goal: Option<Vec2>) -> Vec<Dra
         push(sprite::MUSHROOM, *i, 0.0, false);
     }
     if let Some(b) = &snap.boss {
-        let index = if b.stun > 0 { sprite::BOSS_STUNNED } else { sprite::BOSS };
+        let index = if b.stun > 0 {
+            sprite::BOSS_STUNNED
+        } else {
+            sprite::BOSS
+        };
         push(index, b.pos, BODY_SPRITE_DY, b.vel.x > 0.0);
     }
     push(
@@ -207,10 +221,22 @@ mod tests {
         assert_eq!(player_sprite(&s, Form::Ai), sprite::ROBOT_IDLE);
         assert_eq!(player_sprite(&s, Form::Si), sprite::ROBOT_SI);
 
-        g.step(crate::PadInput { right: true, ..Default::default() }, 5);
+        g.step(
+            crate::PadInput {
+                right: true,
+                ..Default::default()
+            },
+            5,
+        );
         assert_eq!(player_sprite(&g.snapshot(), Form::Ai), sprite::ROBOT_RUN);
 
-        g.step(crate::PadInput { jump: true, ..Default::default() }, 3);
+        g.step(
+            crate::PadInput {
+                jump: true,
+                ..Default::default()
+            },
+            3,
+        );
         assert_eq!(player_sprite(&g.snapshot(), Form::Ai), sprite::ROBOT_JUMP);
     }
 
@@ -222,6 +248,14 @@ mod tests {
         let d = dynamic_draws(&snap, Form::Ai, goal);
         let idx: Vec<usize> = d.iter().map(|x| x.index).collect();
         // 奥から手前: ゴール → アイテム → ボス → プレイヤー
-        assert_eq!(idx, vec![sprite::GOAL, sprite::MUSHROOM, sprite::BOSS, sprite::ROBOT_IDLE]);
+        assert_eq!(
+            idx,
+            vec![
+                sprite::GOAL,
+                sprite::MUSHROOM,
+                sprite::BOSS,
+                sprite::ROBOT_IDLE
+            ]
+        );
     }
 }

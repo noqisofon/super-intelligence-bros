@@ -32,7 +32,12 @@ pub struct SolveConfig {
 
 impl Default for SolveConfig {
     fn default() -> Self {
-        Self { max_expansions: 400_000, max_ticks: 3600, granularities: vec![6, 2, 1], max_seconds: 10.0 }
+        Self {
+            max_expansions: 400_000,
+            max_ticks: 3600,
+            granularities: vec![6, 2, 1],
+            max_seconds: 10.0,
+        }
     }
 }
 
@@ -45,11 +50,22 @@ pub struct PlanStep {
 #[derive(Clone, Debug)]
 pub enum SolveOutcome {
     /// クリアできる入力列が見つかった。
-    Solved { plan: Vec<PlanStep>, ticks: u64, expansions: usize },
+    Solved {
+        plan: Vec<PlanStep>,
+        ticks: u64,
+        expansions: usize,
+    },
     /// 最も細かい粒度でも探索しきった（`max_ticks` 以内では到達不能）。
-    Unreachable { explored: usize, max_ticks: u64, frames: u32 },
+    Unreachable {
+        explored: usize,
+        max_ticks: u64,
+        frames: u32,
+    },
     /// 上限に達して打ち切った。結論は出ていない。
-    GaveUp { expansions: usize, reason: &'static str },
+    GaveUp {
+        expansions: usize,
+        reason: &'static str,
+    },
 }
 
 struct Node {
@@ -94,7 +110,10 @@ pub fn solve(level_src: &str, cfg: &SolveConfig) -> Result<SolveOutcome, String>
             other => return Ok(other),
         }
     }
-    Ok(SolveOutcome::GaveUp { expansions: used, reason: "粒度の指定が空" })
+    Ok(SolveOutcome::GaveUp {
+        expansions: used,
+        reason: "粒度の指定が空",
+    })
 }
 
 fn search(
@@ -110,7 +129,11 @@ fn search(
     let target = |s: &Snapshot| goal_x.or_else(|| s.boss_pos().map(|b| b.x));
     let acts = actions();
 
-    let mut nodes = vec![Node { snap: root.clone(), parent: None, action: PadInput::default() }];
+    let mut nodes = vec![Node {
+        snap: root.clone(),
+        parent: None,
+        action: PadInput::default(),
+    }];
     let mut seen: HashSet<Vec<i32>> = HashSet::new();
     seen.insert(root.key());
     let mut heap = BinaryHeap::new();
@@ -119,10 +142,16 @@ fn search(
 
     while let Some(Reverse((_, idx))) = heap.pop() {
         if *used >= cfg.max_expansions {
-            return SolveOutcome::GaveUp { expansions: *used, reason: "展開数の上限" };
+            return SolveOutcome::GaveUp {
+                expansions: *used,
+                reason: "展開数の上限",
+            };
         }
         if explored % 256 == 0 && started.elapsed().as_secs_f64() > cfg.max_seconds {
-            return SolveOutcome::GaveUp { expansions: *used, reason: "時間の上限" };
+            return SolveOutcome::GaveUp {
+                expansions: *used,
+                reason: "時間の上限",
+            };
         }
         explored += 1;
         *used += 1;
@@ -135,9 +164,17 @@ fn search(
             match snap.status() {
                 Status::Dead => continue,
                 Status::Cleared => {
-                    nodes.push(Node { snap: snap.clone(), parent: Some(idx), action: a });
+                    nodes.push(Node {
+                        snap: snap.clone(),
+                        parent: Some(idx),
+                        action: a,
+                    });
                     let plan = build_plan(&nodes, nodes.len() - 1, frames);
-                    return SolveOutcome::Solved { plan, ticks: snap.tick(), expansions: *used };
+                    return SolveOutcome::Solved {
+                        plan,
+                        ticks: snap.tick(),
+                        expansions: *used,
+                    };
                 }
                 Status::Playing => {}
             }
@@ -145,11 +182,19 @@ fn search(
                 continue;
             }
             let cost = snap.tick() + 2 * heuristic(&snap, target(&snap));
-            nodes.push(Node { snap, parent: Some(idx), action: a });
+            nodes.push(Node {
+                snap,
+                parent: Some(idx),
+                action: a,
+            });
             heap.push(Reverse((cost, nodes.len() - 1)));
         }
     }
-    SolveOutcome::Unreachable { explored: *used, max_ticks: cfg.max_ticks, frames }
+    SolveOutcome::Unreachable {
+        explored: *used,
+        max_ticks: cfg.max_ticks,
+        frames,
+    }
 }
 
 /// 親をたどって入力列を作り、同じ入力が続く所はまとめる。
@@ -191,27 +236,44 @@ fn input_label(i: &PadInput) -> String {
     if i.jump {
         parts.push("jump");
     }
-    if parts.is_empty() { "wait".to_string() } else { parts.join("+") }
+    if parts.is_empty() {
+        "wait".to_string()
+    } else {
+        parts.join("+")
+    }
 }
 
 /// 結果を人間（と LLM）が読めるテキストにする。
 pub fn format_outcome(o: &SolveOutcome) -> String {
     match o {
-        SolveOutcome::Solved { plan, ticks, expansions } => {
+        SolveOutcome::Solved {
+            plan,
+            ticks,
+            expansions,
+        } => {
             let mut out = format!(
                 "solved: {}手・{ticks} tick（約{:.1}秒）でクリアできます（探索 {expansions} ノード）\n",
                 plan.len(),
                 *ticks as f32 / 60.0
             );
             for (n, s) in plan.iter().take(80).enumerate() {
-                out.push_str(&format!("{}. {} {}f\n", n + 1, input_label(&s.input), s.frames));
+                out.push_str(&format!(
+                    "{}. {} {}f\n",
+                    n + 1,
+                    input_label(&s.input),
+                    s.frames
+                ));
             }
             if plan.len() > 80 {
                 out.push_str(&format!("...（残り {} 手は省略）\n", plan.len() - 80));
             }
             out
         }
-        SolveOutcome::Unreachable { explored, max_ticks, frames } => format!(
+        SolveOutcome::Unreachable {
+            explored,
+            max_ticks,
+            frames,
+        } => format!(
             "unreachable: {max_ticks} tick 以内で、{frames}フレーム刻みの操作では、クリアできる入力が見つかりませんでした\
              （合計 {explored} ノードを探索しきりました）。\
              ※この条件の範囲での結論で、絶対に不可能という証明ではありません\n"
@@ -228,7 +290,10 @@ mod tests {
     use super::*;
 
     fn cfg() -> SolveConfig {
-        SolveConfig { max_seconds: 30.0, ..Default::default() }
+        SolveConfig {
+            max_seconds: 30.0,
+            ..Default::default()
+        }
     }
 
     fn solved_plan(src: &str) -> Vec<PlanStep> {
@@ -254,7 +319,10 @@ mod tests {
 ###########";
         // 土管(P)は高さ1。ジャンプしないと越えられない
         let plan = solved_plan(src);
-        assert!(plan.iter().any(|s| s.input.jump), "plan should jump: {plan:?}");
+        assert!(
+            plan.iter().any(|s| s.input.jump),
+            "plan should jump: {plan:?}"
+        );
         assert_eq!(replay(src, &plan).unwrap(), Status::Cleared);
     }
 
@@ -267,7 +335,9 @@ mod tests {
 @..#..G
 #######";
         match solve(src, &cfg()).unwrap() {
-            SolveOutcome::Unreachable { explored, frames, .. } => {
+            SolveOutcome::Unreachable {
+                explored, frames, ..
+            } => {
                 assert!(explored > 0);
                 assert_eq!(frames, 1, "最も細かい粒度まで試してから結論を出すこと");
             }
@@ -299,7 +369,10 @@ mod tests {
         }
         // 高さ3は最大ジャンプ高さ（約2.45）を超える
         let src = wall_level(3);
-        assert!(matches!(solve(&src, &cfg()).unwrap(), SolveOutcome::Unreachable { .. }));
+        assert!(matches!(
+            solve(&src, &cfg()).unwrap(),
+            SolveOutcome::Unreachable { .. }
+        ));
     }
 
     #[test]
@@ -307,9 +380,14 @@ mod tests {
         // ボスは動き回るので、状態が多く探索が重い。ボスのHPを優先度に入れていないと
         // 数十万ノードを使っても解けなかった（回帰テスト）。
         match solve(crate::DEFAULT_LEVEL, &cfg()).unwrap() {
-            SolveOutcome::Solved { plan, expansions, .. } => {
+            SolveOutcome::Solved {
+                plan, expansions, ..
+            } => {
                 assert!(expansions < 20_000, "探索が重すぎる: {expansions}");
-                assert_eq!(replay(crate::DEFAULT_LEVEL, &plan).unwrap(), Status::Cleared);
+                assert_eq!(
+                    replay(crate::DEFAULT_LEVEL, &plan).unwrap(),
+                    Status::Cleared
+                );
             }
             other => panic!("expected Solved, got {other:?}"),
         }
@@ -323,7 +401,13 @@ mod tests {
     #[test]
     fn tiny_budget_gives_up_instead_of_claiming_unreachable() {
         let src = "@.........G\n###########";
-        let cfg = SolveConfig { max_expansions: 1, ..Default::default() };
-        assert!(matches!(solve(src, &cfg).unwrap(), SolveOutcome::GaveUp { .. }));
+        let cfg = SolveConfig {
+            max_expansions: 1,
+            ..Default::default()
+        };
+        assert!(matches!(
+            solve(src, &cfg).unwrap(),
+            SolveOutcome::GaveUp { .. }
+        ));
     }
 }

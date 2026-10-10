@@ -59,7 +59,11 @@ fn main() {
         std::process::exit(1);
     });
     let level = Level::parse(&src);
-    let info = LevelInfo { width: level.width(), height: level.height(), src };
+    let info = LevelInfo {
+        width: level.width(),
+        height: level.height(),
+        src,
+    };
 
     App::new()
         .add_plugins(
@@ -89,7 +93,10 @@ fn main() {
         .init_resource::<CameraTarget>()
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, step_game)
-        .add_systems(Update, (handle_reset, sync_dynamic, follow_camera, update_hud).chain())
+        .add_systems(
+            Update,
+            (handle_reset, sync_dynamic, follow_camera, update_hud).chain(),
+        )
         .run();
 }
 
@@ -98,7 +105,13 @@ fn sprite_for(atlases: &Atlases, d: &Draw) -> Sprite {
         Atlas::Tiles => atlases.tiles.clone(),
         Atlas::Sprites => atlases.sprites.clone(),
     };
-    let mut sprite = Sprite::from_atlas_image(image, TextureAtlas { layout, index: d.index });
+    let mut sprite = Sprite::from_atlas_image(
+        image,
+        TextureAtlas {
+            layout,
+            index: d.index,
+        },
+    );
     sprite.custom_size = Some(Vec2::splat(T));
     sprite.flip_x = d.flip_x;
     sprite
@@ -118,11 +131,23 @@ fn setup(
     let cell = UVec2::splat(visual::TILE_PX);
     let tiles = (
         assets.load("tiles_1985.png"),
-        layouts.add(TextureAtlasLayout::from_grid(cell, visual::TILES_COLS, visual::TILES_ROWS, None, None)),
+        layouts.add(TextureAtlasLayout::from_grid(
+            cell,
+            visual::TILES_COLS,
+            visual::TILES_ROWS,
+            None,
+            None,
+        )),
     );
     let sprites = (
         assets.load("sprites.png"),
-        layouts.add(TextureAtlasLayout::from_grid(cell, visual::SPRITES_COLS, visual::SPRITES_ROWS, None, None)),
+        layouts.add(TextureAtlasLayout::from_grid(
+            cell,
+            visual::SPRITES_COLS,
+            visual::SPRITES_ROWS,
+            None,
+            None,
+        )),
     );
     let atlases = Atlases { tiles, sprites };
 
@@ -137,7 +162,10 @@ fn setup(
 
     commands.spawn((
         Text::new(""),
-        TextFont { font_size: FontSize::Px(22.0), ..default() },
+        TextFont {
+            font_size: FontSize::Px(22.0),
+            ..default()
+        },
         TextColor(Color::WHITE),
         Node {
             position_type: PositionType::Absolute,
@@ -153,7 +181,12 @@ fn read_pad(keys: &ButtonInput<KeyCode>) -> PadInput {
     PadInput {
         left: keys.any_pressed([KeyCode::ArrowLeft, KeyCode::KeyA]),
         right: keys.any_pressed([KeyCode::ArrowRight, KeyCode::KeyD]),
-        jump: keys.any_pressed([KeyCode::Space, KeyCode::KeyZ, KeyCode::ArrowUp, KeyCode::KeyW]),
+        jump: keys.any_pressed([
+            KeyCode::Space,
+            KeyCode::KeyZ,
+            KeyCode::ArrowUp,
+            KeyCode::KeyW,
+        ]),
     }
 }
 
@@ -182,7 +215,11 @@ fn sync_dynamic(
     let snap = g.game.snapshot();
     let draws = visual::dynamic_draws(&snap, g.game.form(), g.game.goal_pos());
     for (i, d) in draws.iter().enumerate() {
-        commands.spawn((sprite_for(&atlases, d), world_pos(d, 1.0 + i as f32 * 0.1), Dynamic));
+        commands.spawn((
+            sprite_for(&atlases, d),
+            world_pos(d, 1.0 + i as f32 * 0.1),
+            Dynamic,
+        ));
     }
     let p = snap.player_pos();
     target.0 = Vec2::new(p.x * T, -p.y * T);
@@ -209,7 +246,9 @@ fn follow_camera(
 }
 
 fn update_hud(mut g: NonSendMut<GameRes>, mut hud: Query<&mut Text, With<HudText>>) {
-    let Ok(mut text) = hud.single_mut() else { return };
+    let Ok(mut text) = hud.single_mut() else {
+        return;
+    };
     let form = match g.game.form() {
         Form::Ai => "AI",
         Form::Si => "SI",

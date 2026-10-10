@@ -110,7 +110,11 @@ pub struct PlayerState {
 
 impl Default for PlayerState {
     fn default() -> Self {
-        Self { status: Status::Playing, form: Form::Ai, invuln: 0 }
+        Self {
+            status: Status::Playing,
+            form: Form::Ai,
+            invuln: 0,
+        }
     }
 }
 
@@ -169,7 +173,13 @@ impl Level {
             }
             rows.push(row);
         }
-        Self { rows, player_start, boss_start, items, goals }
+        Self {
+            rows,
+            player_start,
+            boss_start,
+            items,
+            goals,
+        }
     }
 
     pub fn width(&self) -> i32 {
@@ -188,7 +198,10 @@ impl Level {
             return b'#'; // 左右の端は壁
         }
         // 行の長さが不揃いなレベルでも落ちないよう、足りない所は空気扱い
-        self.rows[y as usize].get(x as usize).copied().unwrap_or(b'.')
+        self.rows[y as usize]
+            .get(x as usize)
+            .copied()
+            .unwrap_or(b'.')
     }
 
     fn solid(&self, x: i32, y: i32) -> bool {
@@ -196,8 +209,14 @@ impl Level {
     }
 
     fn collides(&self, center: Vec2, half: Vec2) -> bool {
-        let (x0, x1) = ((center.x - half.x).floor() as i32, (center.x + half.x).floor() as i32);
-        let (y0, y1) = ((center.y - half.y).floor() as i32, (center.y + half.y).floor() as i32);
+        let (x0, x1) = (
+            (center.x - half.x).floor() as i32,
+            (center.x + half.x).floor() as i32,
+        );
+        let (y0, y1) = (
+            (center.y - half.y).floor() as i32,
+            (center.y + half.y).floor() as i32,
+        );
         (y0..=y1).any(|y| (x0..=x1).any(|x| self.solid(x, y)))
     }
 }
@@ -254,7 +273,9 @@ pub fn validate_level(src: &str) -> Result<(), String> {
         }
     }
     if players != 1 {
-        return Err(format!("'@'（プレイヤー開始位置）はちょうど1つ必要です（今は {players} 個）"));
+        return Err(format!(
+            "'@'（プレイヤー開始位置）はちょうど1つ必要です（今は {players} 個）"
+        ));
     }
     if bosses > 1 {
         return Err(format!("'B'（ボス）は最大1つです（今は {bosses} 個）"));
@@ -384,7 +405,10 @@ fn interact(
         if overlap(p, BODY_HALF, ipos.0, ITEM_HALF) {
             commands.entity(e).despawn();
             state.form = Form::Si;
-            log.push(t, "Sキノコを取った。看板が AI から SI に変わった。中身は何も変わっていない。");
+            log.push(
+                t,
+                "Sキノコを取った。看板が AI から SI に変わった。中身は何も変わっていない。",
+            );
         }
     }
 
@@ -416,14 +440,20 @@ fn interact(
                 boss.stun = BOSS_STUN_TICKS;
                 log.push(
                     t,
-                    &format!("スーパー部長を踏んだ。看板が「AI」に戻った。(残りHP {})", boss.hp),
+                    &format!(
+                        "スーパー部長を踏んだ。看板が「AI」に戻った。(残りHP {})",
+                        boss.hp
+                    ),
                 );
             }
         } else if state.invuln == 0 {
             if state.form == Form::Si {
                 state.form = Form::Ai;
                 state.invuln = INVULN_TICKS;
-                log.push(t, "スーパー部長にぶつかった。SIの看板を奪われて AI に戻った。");
+                log.push(
+                    t,
+                    "スーパー部長にぶつかった。SIの看板を奪われて AI に戻った。",
+                );
             } else {
                 state.status = Status::Dead;
                 log.push(t, "スーパー部長にぶつかってやられた。ゲームオーバー。");
@@ -549,15 +579,28 @@ impl Game {
             .init_resource::<Tick>()
             .init_resource::<PlayerState>()
             .init_resource::<EventLog>()
-            .add_systems(Update, (player_physics, boss_ai, interact, count_tick).chain());
+            .add_systems(
+                Update,
+                (player_physics, boss_ai, interact, count_tick).chain(),
+            );
         app.finish();
         app.cleanup();
 
         let world = app.world_mut();
-        world.spawn((Player, Pos(player_start), Vel::default(), OnGround(grounded)));
+        world.spawn((
+            Player,
+            Pos(player_start),
+            Vel::default(),
+            OnGround(grounded),
+        ));
         if let Some(b) = boss_start {
             world.spawn((
-                Boss { hp: BOSS_HP, dir: -1.0, stun: 0, shout: 0 },
+                Boss {
+                    hp: BOSS_HP,
+                    dir: -1.0,
+                    stun: 0,
+                    shout: 0,
+                },
                 Pos(b),
                 Vel::default(),
             ));
@@ -603,7 +646,11 @@ impl Game {
 
         // グリッド: 地形 → アイテム → ボス → プレイヤーの順に重ねる
         let mut grid: Vec<Vec<char>> = (0..level.height())
-            .map(|y| (0..level.width()).map(|x| level.tile(x, y) as char).collect())
+            .map(|y| {
+                (0..level.width())
+                    .map(|x| level.tile(x, y) as char)
+                    .collect()
+            })
             .collect();
         let mut put = |p: Vec2, c: char| {
             let (x, y) = (p.x.floor() as i32, p.y.floor() as i32);
@@ -626,13 +673,17 @@ impl Game {
             "tick={tick} status={} form={}\nplayer: pos=({:.2},{:.2}) vel=({:.2},{:.2}) on_ground={ground}\n",
             status.as_str(),
             form.as_str(),
-            pos.x, pos.y, vel.x, vel.y
+            pos.x,
+            pos.y,
+            vel.x,
+            vel.y
         );
         match boss {
             Some((bp, hp, stunned)) => out.push_str(&format!(
                 "boss: hp={hp} sign={} pos=({:.2},{:.2})\n",
                 if stunned { "AI" } else { "SI" },
-                bp.x, bp.y
+                bp.x,
+                bp.y
             )),
             None => out.push_str("boss: defeated\n"),
         }
@@ -678,7 +729,17 @@ impl Game {
             q.iter(world).map(|p| p.0).collect()
         };
         items.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
-        Snapshot { tick, status, form, invuln, player_pos, player_vel, player_ground, boss, items }
+        Snapshot {
+            tick,
+            status,
+            form,
+            invuln,
+            player_pos,
+            player_vel,
+            player_ground,
+            boss,
+            items,
+        }
     }
 
     /// 保存した状態に巻き戻す（イベントログは空になる）。
@@ -708,7 +769,12 @@ impl Game {
         }
         if let Some(b) = &s.boss {
             world.spawn((
-                Boss { hp: b.hp, dir: b.dir, stun: b.stun, shout: b.shout },
+                Boss {
+                    hp: b.hp,
+                    dir: b.dir,
+                    stun: b.stun,
+                    shout: b.shout,
+                },
                 Pos(b.pos),
                 Vel(b.vel),
             ));
@@ -758,9 +824,21 @@ impl Default for Game {
 mod tests {
     use super::*;
 
-    const RIGHT: PadInput = PadInput { left: false, right: true, jump: false };
-    const IDLE: PadInput = PadInput { left: false, right: false, jump: false };
-    const JUMP_RIGHT: PadInput = PadInput { left: false, right: true, jump: true };
+    const RIGHT: PadInput = PadInput {
+        left: false,
+        right: true,
+        jump: false,
+    };
+    const IDLE: PadInput = PadInput {
+        left: false,
+        right: false,
+        jump: false,
+    };
+    const JUMP_RIGHT: PadInput = PadInput {
+        left: false,
+        right: true,
+        jump: true,
+    };
 
     /// ボスがうろうろするだけの平らな舞台。
     const ARENA: &str = "\
@@ -946,7 +1024,12 @@ mod tests {
         fresh.step(JUMP_RIGHT, 40);
         let after_fresh = fresh.observe();
 
-        let strip = |s: &str| s.lines().filter(|l| !l.starts_with("events") && !l.starts_with("- ")).collect::<Vec<_>>().join("\n");
+        let strip = |s: &str| {
+            s.lines()
+                .filter(|l| !l.starts_with("events") && !l.starts_with("- "))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
         assert_eq!(strip(&after_restore), strip(&after_fresh));
     }
 
@@ -958,7 +1041,10 @@ mod tests {
         assert_eq!(g.form(), Form::Si);
         g.restore(&before);
         assert_eq!(g.form(), Form::Ai);
-        assert!(g.observe().contains('S'), "Sキノコがグリッドに戻っているはず");
+        assert!(
+            g.observe().contains('S'),
+            "Sキノコがグリッドに戻っているはず"
+        );
     }
 
     #[test]

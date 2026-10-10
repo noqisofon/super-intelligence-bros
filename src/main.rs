@@ -2,8 +2,15 @@ use super_intelligence_bros::{Game, PadInput};
 
 fn main() {
     let mut game = Game::new();
-    let right = PadInput { right: true, ..Default::default() };
-    let jump_right = PadInput { right: true, jump: true, ..Default::default() };
+    let right = PadInput {
+        right: true,
+        ..Default::default()
+    };
+    let jump_right = PadInput {
+        right: true,
+        jump: true,
+        ..Default::default()
+    };
 
     println!("--- 右に1秒走る（Sキノコを取る）");
     game.step(right, 60);
