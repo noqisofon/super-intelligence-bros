@@ -2,6 +2,7 @@
 name = "super-intelligence-bros"
 version = "0.1.0"
 edition = "2024"
+default-run = "super-intelligence-bros"
 
 [dependencies]
 # ヘッドレス用: 描画・ウィンドウ系の feature は入れない

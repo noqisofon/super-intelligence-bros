@@ -68,7 +68,7 @@ pub struct PadInput {
 #[derive(Resource, Default)]
 pub struct Tick(pub u64);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Status {
     Playing,
     Dead,
@@ -86,7 +86,7 @@ impl Status {
 }
 
 /// 看板（名前）の状態。見た目だけで、強さは変わらない。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Form {
     Ai,
     Si,
@@ -297,8 +297,16 @@ fn integrate(level: &Level, pos: &mut Vec2, vel: &mut Vec2, half: Vec2) -> (bool
     if level.collides(*pos, half) {
         pos.x = if vel.x > 0.0 {
             (pos.x + half.x).floor() - half.x - EPS
-        } else {
+        } else if vel.x < 0.0 {
             (pos.x - half.x).floor() + 1.0 + half.x + EPS
+        } else {
+            // 静止時にめり込んだ場合は、セル中心から離れる外側方向へ押し出す
+            let cell_center = pos.x.floor() + 0.5;
+            if pos.x < cell_center {
+                (pos.x + half.x).floor() - half.x - EPS
+            } else {
+                (pos.x - half.x).floor() + 1.0 + half.x + EPS
+            }
         };
         vel.x = 0.0;
         hit_x = true;
@@ -374,7 +382,7 @@ fn boss_ai(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn interact(
     mut commands: Commands,
     level: Res<Level>,
@@ -515,35 +523,56 @@ impl Snapshot {
 
     /// 「同じ状態」とみなすための量子化キー。時刻(tick)は含めない
     /// （ボスの位相・無敵時間などが状態に入っているので、時刻自体は結果に影響しない）。
-    pub fn key(&self) -> Vec<i32> {
+    pub fn key(&self) -> SnapshotKey {
         let q = |v: f32, scale: f32| (v * scale).round() as i32;
-        let mut k = vec![
-            q(self.player_pos.x, 32.0),
-            q(self.player_pos.y, 32.0),
-            q(self.player_vel.x, 8.0),
-            q(self.player_vel.y, 8.0),
-            self.player_ground as i32,
-            self.status as i32,
-            self.form as i32,
-            self.invuln as i32,
-        ];
-        match &self.boss {
-            Some(b) => k.extend([
-                1,
-                q(b.pos.x, 32.0),
-                q(b.pos.y, 32.0),
-                q(b.vel.x, 4.0),
-                b.hp as i32,
-                b.dir as i32,
-                b.stun as i32,
-            ]),
-            None => k.push(0),
+        SnapshotKey {
+            player_x: q(self.player_pos.x, 32.0),
+            player_y: q(self.player_pos.y, 32.0),
+            player_vx: q(self.player_vel.x, 8.0),
+            player_vy: q(self.player_vel.y, 8.0),
+            player_ground: self.player_ground,
+            status: self.status,
+            form: self.form,
+            invuln: self.invuln,
+            boss: self.boss.as_ref().map(|b| BossKey {
+                x: q(b.pos.x, 32.0),
+                y: q(b.pos.y, 32.0),
+                vx: q(b.vel.x, 4.0),
+                hp: b.hp,
+                dir: b.dir as i32,
+                stun: b.stun,
+            }),
+            items: self
+                .items
+                .iter()
+                .map(|i| (q(i.x, 2.0), q(i.y, 2.0)))
+                .collect(),
         }
-        for i in &self.items {
-            k.extend([q(i.x, 2.0), q(i.y, 2.0)]);
-        }
-        k
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct BossKey {
+    pub x: i32,
+    pub y: i32,
+    pub vx: i32,
+    pub hp: u8,
+    pub dir: i32,
+    pub stun: u32,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct SnapshotKey {
+    pub player_x: i32,
+    pub player_y: i32,
+    pub player_vx: i32,
+    pub player_vy: i32,
+    pub player_ground: bool,
+    pub status: Status,
+    pub form: Form,
+    pub invuln: u32,
+    pub boss: Option<BossKey>,
+    pub items: Vec<(i32, i32)>,
 }
 
 // ---------------------------------------------------------------- Game

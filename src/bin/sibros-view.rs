@@ -201,26 +201,35 @@ fn handle_reset(mut g: NonSendMut<GameRes>, keys: Res<ButtonInput<KeyCode>>, inf
     }
 }
 
-/// 動くものを毎フレーム作り直す（数が少ないので単純さを優先）。
+/// 動くもの（キャラ・アイテム・ゴール）の描画をゲーム状態と同期する。
+/// 既存の Entity を再利用し、過不足分のみ spawn / despawn する。
 fn sync_dynamic(
     mut commands: Commands,
     mut g: NonSendMut<GameRes>,
     atlases: Res<Atlases>,
-    old: Query<Entity, With<Dynamic>>,
+    mut dynamic_query: Query<(Entity, &mut Sprite, &mut Transform), With<Dynamic>>,
     mut target: ResMut<CameraTarget>,
 ) {
-    for e in &old {
-        commands.entity(e).despawn();
-    }
     let snap = g.game.snapshot();
     let draws = visual::dynamic_draws(&snap, g.game.form(), g.game.goal_pos());
+
+    let mut existing: Vec<_> = dynamic_query.iter_mut().collect();
     for (i, d) in draws.iter().enumerate() {
-        commands.spawn((
-            sprite_for(&atlases, d),
-            world_pos(d, 1.0 + i as f32 * 0.1),
-            Dynamic,
-        ));
+        let pos = world_pos(d, 1.0 + i as f32 * 0.1);
+        let sprite = sprite_for(&atlases, d);
+        if let Some((_, existing_sprite, existing_pos)) = existing.get_mut(i) {
+            **existing_sprite = sprite;
+            **existing_pos = pos;
+        } else {
+            commands.spawn((sprite, pos, Dynamic));
+        }
     }
+
+    // draws より多い既存エンティティ（消えたアイテムやボスなど）は削除
+    for (e, _, _) in existing.into_iter().skip(draws.len()) {
+        commands.entity(e).despawn();
+    }
+
     let p = snap.player_pos();
     target.0 = Vec2::new(p.x * T, -p.y * T);
 }

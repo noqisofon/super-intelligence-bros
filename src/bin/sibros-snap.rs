@@ -5,7 +5,7 @@
 //!
 //! - `--level FILE`: ステージのテキストファイル。省略すると初期ステージ。
 //! - `--run SPEC`  : 描く前にゲームを進める。例 `right:60,right+jump:20,wait:10`
-//!                   （入力は left / right / jump を `+` でつなぐ。何も押さないなら wait）
+//!   （入力は left / right / jump を `+` でつなぐ。何も押さないなら wait）
 //! - `--scale N`   : 拡大率（既定 4）
 //!
 //! 描画版 `sibros-view` と同じ割り当て（`visual` モジュール）を使うので、
@@ -21,6 +21,7 @@ const SPRITES_PNG: &[u8] = include_bytes!("../../assets/sprites.png");
 
 struct Image {
     w: usize,
+    #[allow(dead_code)]
     h: usize,
     rgba: Vec<u8>,
 }
@@ -148,7 +149,6 @@ fn main() -> Result<(), String> {
             }
         }
     }
-    let _ = (tiles.h, sprites.h);
 
     let file = std::fs::File::create(&out_path).map_err(|e| format!("{out_path}: {e}"))?;
     let mut enc = png::Encoder::new(std::io::BufWriter::new(file), w as u32, h as u32);

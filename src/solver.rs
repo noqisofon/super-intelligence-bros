@@ -16,7 +16,7 @@ use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashSet};
 use std::time::Instant;
 
-use crate::{Game, PadInput, Snapshot, Status};
+use crate::{Game, PadInput, Snapshot, SnapshotKey, Status};
 
 #[derive(Clone, Debug)]
 pub struct SolveConfig {
@@ -134,7 +134,7 @@ fn search(
         parent: None,
         action: PadInput::default(),
     }];
-    let mut seen: HashSet<Vec<i32>> = HashSet::new();
+    let mut seen: HashSet<SnapshotKey> = HashSet::new();
     seen.insert(root.key());
     let mut heap = BinaryHeap::new();
     heap.push(Reverse((heuristic(root, target(root)), 0usize)));
@@ -147,7 +147,7 @@ fn search(
                 reason: "展開数の上限",
             };
         }
-        if explored % 256 == 0 && started.elapsed().as_secs_f64() > cfg.max_seconds {
+        if explored.is_multiple_of(256) && started.elapsed().as_secs_f64() > cfg.max_seconds {
             return SolveOutcome::GaveUp {
                 expansions: *used,
                 reason: "時間の上限",
