@@ -24,7 +24,7 @@ fn main() {
     game.step(jump_right, 30);
     println!("{}", game.observe());
 
-    println!("--- 5秒そのまま走る（ボスに会う）");
-    game.step(right, 300);
+    println!("--- そのまま走って2本目の土管の手前へ");
+    game.step(right, 120);
     println!("{}", game.observe());
 }
